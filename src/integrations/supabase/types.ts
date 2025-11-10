@@ -186,6 +186,8 @@ export type Database = {
           created_at: string
           document_id: string | null
           id: string
+          is_public: boolean | null
+          share_token: string | null
           title: string
           updated_at: string
           user_id: string
@@ -194,6 +196,8 @@ export type Database = {
           created_at?: string
           document_id?: string | null
           id?: string
+          is_public?: boolean | null
+          share_token?: string | null
           title?: string
           updated_at?: string
           user_id: string
@@ -202,6 +206,8 @@ export type Database = {
           created_at?: string
           document_id?: string | null
           id?: string
+          is_public?: boolean | null
+          share_token?: string | null
           title?: string
           updated_at?: string
           user_id?: string

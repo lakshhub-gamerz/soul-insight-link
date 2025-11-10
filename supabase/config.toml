@@ -5,3 +5,12 @@ verify_jwt = true
 
 [functions.lifesync-chat]
 verify_jwt = true
+
+[functions.process-document]
+verify_jwt = true
+
+[functions.generate-summary]
+verify_jwt = true
+
+[functions.generate-insights]
+verify_jwt = true

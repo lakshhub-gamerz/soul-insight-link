@@ -1,80 +1,101 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { Globe, Send, Upload, ArrowLeft, Sparkles } from "lucide-react";
+import { Globe, Send, Upload, ArrowLeft, Sparkles, History, Share2, Sparkle, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryNetChat } from "@/hooks/useChat";
 import { useToast } from "@/hooks/use-toast";
+import ChatHistory from "@/components/ChatHistory";
+import ShareChatDialog from "@/components/ShareChatDialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 const QueryNet = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
   const [url, setUrl] = useState("");
   const [chatId, setChatId] = useState<string>("");
   const [documentId, setDocumentId] = useState<string | undefined>(undefined);
   const [input, setInput] = useState("");
+  const [localMessages, setLocalMessages] = useState<any[]>([]);
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const [generatingSummary, setGeneratingSummary] = useState(false);
+  const [summary, setSummary] = useState("");
+  const [showHistory, setShowHistory] = useState(false);
+  const [showShare, setShowShare] = useState(false);
+  const [showSummary, setShowSummary] = useState(false);
+  
   const { messages, isLoading, sendMessage } = useQueryNetChat(chatId, documentId);
 
   useEffect(() => {
-    // Create or get active chat
-    const initChat = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      // Get or create a chat
-      const { data: existingChats } = await supabase
-        .from("querynet_chats")
-        .select("id")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
-        .limit(1);
-
-      if (existingChats && existingChats.length > 0) {
-        setChatId(existingChats[0].id);
-        
-        // Load messages
-        const { data: msgs } = await supabase
-          .from("querynet_messages")
-          .select("*")
-          .eq("chat_id", existingChats[0].id)
-          .order("created_at");
-        
-        if (msgs && msgs.length === 0) {
-          // Insert welcome message
-          await supabase
-            .from("querynet_messages")
-            .insert({
-              chat_id: existingChats[0].id,
-              role: "assistant",
-              content: "Hello! I'm Astra, your guide to the world's knowledge. Share a URL or upload a document, and I'll help you understand it."
-            });
-        }
-      } else {
-        // Create new chat
-        const { data: newChat } = await supabase
-          .from("querynet_chats")
-          .insert({ user_id: user.id, title: "New Chat" })
-          .select()
-          .single();
-        
-        if (newChat) {
-          setChatId(newChat.id);
-          // Insert welcome message
-          await supabase
-            .from("querynet_messages")
-            .insert({
-              chat_id: newChat.id,
-              role: "assistant",
-              content: "Hello! I'm Astra, your guide to the world's knowledge. Share a URL or upload a document, and I'll help you understand it."
-            });
-        }
-      }
-    };
-
     initChat();
   }, []);
+
+  useEffect(() => {
+    if (chatId) {
+      loadMessages();
+    }
+  }, [chatId]);
+
+  const initChat = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data: existingChats } = await supabase
+      .from("querynet_chats")
+      .select("id")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    if (existingChats && existingChats.length > 0) {
+      setChatId(existingChats[0].id);
+    } else {
+      const { data: newChat } = await supabase
+        .from("querynet_chats")
+        .insert({ user_id: user.id, title: "New Chat" })
+        .select()
+        .single();
+      
+      if (newChat) {
+        setChatId(newChat.id);
+        await supabase
+          .from("querynet_messages")
+          .insert({
+            chat_id: newChat.id,
+            role: "assistant",
+            content: "Hello! I'm Astra, your guide to the world's knowledge. Share a URL or upload a document, and I'll help you understand it."
+          });
+      }
+    }
+  };
+
+  const loadMessages = async () => {
+    const { data: msgs } = await supabase
+      .from("querynet_messages")
+      .select("*")
+      .eq("chat_id", chatId)
+      .order("created_at");
+    
+    if (msgs) {
+      setLocalMessages(msgs);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -82,21 +103,67 @@ const QueryNet = () => {
     
     await sendMessage(input);
     setInput("");
+    loadMessages();
   };
 
-  const handleLoadUrl = async () => {
-    if (!url.trim()) {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingFile(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const { data, error } = await supabase.functions.invoke("process-document", {
+        body: formData,
+      });
+
+      if (error) throw error;
+
+      setDocumentId(data.documentId);
       toast({
-        title: "Please enter a URL",
+        title: "Document uploaded!",
+        description: `${data.chunksCount} sections extracted. You can now ask questions about it.`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Upload failed",
+        description: error.message,
         variant: "destructive",
       });
-      return;
+    } finally {
+      setUploadingFile(false);
     }
+  };
 
-    toast({
-      title: "URL Processing",
-      description: "Document processing and RAG features coming soon!",
-    });
+  const handleGenerateSummary = async () => {
+    if (!chatId) return;
+    
+    setGeneratingSummary(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("generate-summary", {
+        body: { chatId },
+      });
+
+      if (error) throw error;
+
+      setSummary(data.summary);
+      setShowSummary(true);
+    } catch (error: any) {
+      toast({
+        title: "Summary generation failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setGeneratingSummary(false);
+    }
+  };
+
+  const handleSelectChat = async (newChatId: string) => {
+    setChatId(newChatId);
+    setShowHistory(false);
   };
 
   return (
@@ -150,7 +217,7 @@ const QueryNet = () => {
                   className="bg-input border-outer-primary/30 focus:border-outer-primary"
                 />
                 <Button 
-                  onClick={handleLoadUrl}
+                  onClick={() => toast({ title: "URL Processing", description: "Feature coming soon!" })}
                   className="w-full bg-outer-primary hover:bg-outer-primary-light text-background"
                 >
                   Load URL
@@ -163,9 +230,25 @@ const QueryNet = () => {
                     <span className="bg-card px-2 text-muted-foreground">Or</span>
                   </div>
                 </div>
-                <Button variant="outline" className="w-full gap-2 border-outer-primary/30 hover:bg-outer-primary/10">
-                  <Upload className="w-4 h-4" />
-                  Upload PDF (Coming Soon)
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf,.txt,.doc,.docx"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+                <Button 
+                  variant="outline" 
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploadingFile}
+                  className="w-full gap-2 border-outer-primary/30 hover:bg-outer-primary/10"
+                >
+                  {uploadingFile ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Upload className="w-4 h-4" />
+                  )}
+                  {uploadingFile ? "Uploading..." : "Upload Document"}
                 </Button>
               </div>
             </div>
@@ -173,14 +256,32 @@ const QueryNet = () => {
             <div className="pt-4 border-t border-border">
               <h3 className="text-sm font-semibold mb-2 text-muted-foreground">Quick Actions</h3>
               <div className="space-y-2">
-                <Button variant="ghost" className="w-full justify-start text-sm hover:bg-outer-primary/10">
-                  📝 Quick Summary
+                <Button 
+                  variant="ghost" 
+                  onClick={handleGenerateSummary}
+                  disabled={generatingSummary || localMessages.length < 2}
+                  className="w-full justify-start text-sm hover:bg-outer-primary/10"
+                >
+                  {generatingSummary ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Sparkle className="mr-2" />
+                  )}
+                  Quick Summary
                 </Button>
-                <Button variant="ghost" className="w-full justify-start text-sm hover:bg-outer-primary/10">
-                  📚 History
+                <Button 
+                  variant="ghost" 
+                  onClick={() => setShowHistory(true)}
+                  className="w-full justify-start text-sm hover:bg-outer-primary/10"
+                >
+                  <History className="mr-2" /> History
                 </Button>
-                <Button variant="ghost" className="w-full justify-start text-sm hover:bg-outer-primary/10">
-                  🔗 Share Chat
+                <Button 
+                  variant="ghost"
+                  onClick={() => setShowShare(true)}
+                  className="w-full justify-start text-sm hover:bg-outer-primary/10"
+                >
+                  <Share2 className="mr-2" /> Share Chat
                 </Button>
               </div>
             </div>
@@ -200,7 +301,7 @@ const QueryNet = () => {
 
             {/* Messages */}
             <div className="flex-1 overflow-y-auto space-y-4 mb-4">
-              {messages.map((msg, i) => (
+              {localMessages.map((msg, i) => (
                 <div
                   key={i}
                   className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
@@ -260,6 +361,45 @@ const QueryNet = () => {
           </Card>
         </div>
       </div>
+
+      {/* History Sheet */}
+      <Sheet open={showHistory} onOpenChange={setShowHistory}>
+        <SheetContent>
+          <SheetHeader>
+            <SheetTitle>Chat History</SheetTitle>
+            <SheetDescription>Browse and select previous conversations</SheetDescription>
+          </SheetHeader>
+          <div className="mt-6">
+            <ChatHistory 
+              mode="querynet"
+              onSelectChat={handleSelectChat}
+              currentChatId={chatId}
+            />
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Share Dialog */}
+      <ShareChatDialog 
+        chatId={chatId}
+        open={showShare}
+        onOpenChange={setShowShare}
+      />
+
+      {/* Summary Dialog */}
+      <Dialog open={showSummary} onOpenChange={setShowSummary}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkle className="w-5 h-5 text-outer-primary" />
+              Conversation Summary
+            </DialogTitle>
+          </DialogHeader>
+          <div className="prose prose-sm max-w-none">
+            <p className="whitespace-pre-wrap">{summary}</p>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

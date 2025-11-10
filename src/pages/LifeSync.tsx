@@ -2,17 +2,30 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { Sparkles, Send, ArrowLeft, Globe } from "lucide-react";
+import { Sparkles, Send, ArrowLeft, Globe, BarChart3, History } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useLifeSyncChat } from "@/hooks/useChat";
 import { useToast } from "@/hooks/use-toast";
+import LifeSyncDashboard from "@/components/LifeSyncDashboard";
+import ChatHistory from "@/components/ChatHistory";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 
 const LifeSync = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [chatId, setChatId] = useState<string>("");
   const [input, setInput] = useState("");
+  const [localMessages, setLocalMessages] = useState<any[]>([]);
+  const [showDashboard, setShowDashboard] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  
   const { messages, isLoading, sendMessage } = useLifeSyncChat(chatId);
   
   // Daily log state
@@ -30,63 +43,59 @@ const LifeSync = () => {
   ];
 
   useEffect(() => {
-    // Create or get active chat
-    const initChat = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      // Get or create a chat
-      const { data: existingChats } = await supabase
-        .from("lifesync_chats")
-        .select("id")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
-        .limit(1);
-
-      if (existingChats && existingChats.length > 0) {
-        setChatId(existingChats[0].id);
-        
-        // Load messages
-        const { data: msgs } = await supabase
-          .from("lifesync_messages")
-          .select("*")
-          .eq("chat_id", existingChats[0].id)
-          .order("created_at");
-        
-        if (msgs && msgs.length === 0) {
-          // Insert welcome message
-          await supabase
-            .from("lifesync_messages")
-            .insert({
-              chat_id: existingChats[0].id,
-              role: "assistant",
-              content: "Welcome! I'm Luma, your personal reflection companion. How are you feeling today?"
-            });
-        }
-      } else {
-        // Create new chat
-        const { data: newChat } = await supabase
-          .from("lifesync_chats")
-          .insert({ user_id: user.id, title: "Reflection" })
-          .select()
-          .single();
-        
-        if (newChat) {
-          setChatId(newChat.id);
-          // Insert welcome message
-          await supabase
-            .from("lifesync_messages")
-            .insert({
-              chat_id: newChat.id,
-              role: "assistant",
-              content: "Welcome! I'm Luma, your personal reflection companion. How are you feeling today?"
-            });
-        }
-      }
-    };
-
     initChat();
   }, []);
+
+  useEffect(() => {
+    if (chatId) {
+      loadMessages();
+    }
+  }, [chatId]);
+
+  const initChat = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data: existingChats } = await supabase
+      .from("lifesync_chats")
+      .select("id")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    if (existingChats && existingChats.length > 0) {
+      setChatId(existingChats[0].id);
+    } else {
+      const { data: newChat } = await supabase
+        .from("lifesync_chats")
+        .insert({ user_id: user.id, title: "Reflection" })
+        .select()
+        .single();
+      
+      if (newChat) {
+        setChatId(newChat.id);
+        await supabase
+          .from("lifesync_messages")
+          .insert({
+            chat_id: newChat.id,
+            role: "assistant",
+            content: "Welcome! I'm Luma, your personal reflection companion. How are you feeling today?"
+          });
+      }
+    }
+  };
+
+  const loadMessages = async () => {
+    const { data: msgs } = await supabase
+      .from("lifesync_messages")
+      .select("*")
+      .eq("chat_id", chatId)
+      .order("created_at");
+    
+    if (msgs) {
+      setLocalMessages(msgs);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -94,6 +103,7 @@ const LifeSync = () => {
     
     await sendMessage(input);
     setInput("");
+    loadMessages();
   };
 
   const handleSaveLog = async () => {
@@ -131,7 +141,6 @@ const LifeSync = () => {
         description: "Your daily reflection has been recorded.",
       });
 
-      // Clear form
       setSelectedMood(null);
       setSleepHours("");
       setFocusHours("");
@@ -144,6 +153,25 @@ const LifeSync = () => {
       });
     }
   };
+
+  const handleSelectChat = async (newChatId: string) => {
+    setChatId(newChatId);
+    setShowHistory(false);
+  };
+
+  if (showDashboard) {
+    return (
+      <div className="min-h-screen bg-background relative overflow-hidden">
+        <div className="absolute inset-0 overflow-hidden">
+          <div className="absolute top-1/4 -left-1/4 w-1/2 h-1/2 bg-inner-primary/10 rounded-full blur-[120px]" />
+          <div className="absolute bottom-1/4 -right-1/4 w-1/2 h-1/2 bg-inner-accent/10 rounded-full blur-[120px]" />
+        </div>
+        <div className="relative z-10 container mx-auto px-4 py-8 max-w-6xl">
+          <LifeSyncDashboard onClose={() => setShowDashboard(false)} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background relative overflow-hidden">
@@ -257,14 +285,19 @@ const LifeSync = () => {
             <div className="pt-4 border-t border-border">
               <h3 className="text-sm font-semibold mb-2 text-muted-foreground">Insights</h3>
               <div className="space-y-2">
-                <Button variant="ghost" className="w-full justify-start text-sm hover:bg-inner-primary/10">
-                  📊 Dashboard (Coming Soon)
+                <Button 
+                  variant="ghost"
+                  onClick={() => setShowDashboard(true)}
+                  className="w-full justify-start text-sm hover:bg-inner-primary/10"
+                >
+                  <BarChart3 className="mr-2" /> Dashboard
                 </Button>
-                <Button variant="ghost" className="w-full justify-start text-sm hover:bg-inner-primary/10">
-                  🔥 Streak
-                </Button>
-                <Button variant="ghost" className="w-full justify-start text-sm hover:bg-inner-primary/10">
-                  ⭐ Weekly Summary
+                <Button 
+                  variant="ghost"
+                  onClick={() => setShowHistory(true)}
+                  className="w-full justify-start text-sm hover:bg-inner-primary/10"
+                >
+                  <History className="mr-2" /> History
                 </Button>
               </div>
             </div>
@@ -284,7 +317,7 @@ const LifeSync = () => {
 
             {/* Messages */}
             <div className="flex-1 overflow-y-auto space-y-4 mb-4">
-              {messages.map((msg, i) => (
+              {localMessages.map((msg, i) => (
                 <div
                   key={i}
                   className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
@@ -334,6 +367,23 @@ const LifeSync = () => {
           </Card>
         </div>
       </div>
+
+      {/* History Sheet */}
+      <Sheet open={showHistory} onOpenChange={setShowHistory}>
+        <SheetContent>
+          <SheetHeader>
+            <SheetTitle>Chat History</SheetTitle>
+            <SheetDescription>Browse and select previous reflections</SheetDescription>
+          </SheetHeader>
+          <div className="mt-6">
+            <ChatHistory 
+              mode="lifesync"
+              onSelectChat={handleSelectChat}
+              currentChatId={chatId}
+            />
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 };
