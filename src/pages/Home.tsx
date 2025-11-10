@@ -1,12 +1,30 @@
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Globe, Sparkles } from "lucide-react";
+import { Globe, Sparkles, LogOut } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 const Home = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    toast({ title: "Logged out successfully" });
+    navigate("/auth");
+  };
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-background relative overflow-hidden">
+      {/* Logout button */}
+      <button
+        onClick={handleLogout}
+        className="absolute top-4 right-4 z-50 p-2 rounded-lg bg-glass border border-glass hover:bg-glass/80 transition-all"
+        aria-label="Logout"
+      >
+        <LogOut className="w-5 h-5" />
+      </button>
+
       {/* Animated background gradients */}
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute -top-1/2 -left-1/2 w-full h-full bg-outer-primary/10 rounded-full blur-[120px] animate-pulse" />

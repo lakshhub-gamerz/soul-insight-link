@@ -1,1 +1,7 @@
 project_id = "lxctbtdgxxxrggcwajgl"
+
+[functions.querynet-chat]
+verify_jwt = true
+
+[functions.lifesync-chat]
+verify_jwt = true

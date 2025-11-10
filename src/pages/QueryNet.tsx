@@ -1,27 +1,102 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Globe, Send, Upload, ArrowLeft, Sparkles } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { useQueryNetChat } from "@/hooks/useChat";
+import { useToast } from "@/hooks/use-toast";
 
 const QueryNet = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [url, setUrl] = useState("");
-  const [messages, setMessages] = useState<Array<{ role: string; content: string }>>([
-    { role: "assistant", content: "Hello! I'm Astra, your guide to the world's knowledge. Share a URL or upload a document, and I'll help you understand it." }
-  ]);
+  const [chatId, setChatId] = useState<string>("");
+  const [documentId, setDocumentId] = useState<string | undefined>(undefined);
   const [input, setInput] = useState("");
+  const { messages, isLoading, sendMessage } = useQueryNetChat(chatId, documentId);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    // Create or get active chat
+    const initChat = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Get or create a chat
+      const { data: existingChats } = await supabase
+        .from("querynet_chats")
+        .select("id")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      if (existingChats && existingChats.length > 0) {
+        setChatId(existingChats[0].id);
+        
+        // Load messages
+        const { data: msgs } = await supabase
+          .from("querynet_messages")
+          .select("*")
+          .eq("chat_id", existingChats[0].id)
+          .order("created_at");
+        
+        if (msgs && msgs.length === 0) {
+          // Insert welcome message
+          await supabase
+            .from("querynet_messages")
+            .insert({
+              chat_id: existingChats[0].id,
+              role: "assistant",
+              content: "Hello! I'm Astra, your guide to the world's knowledge. Share a URL or upload a document, and I'll help you understand it."
+            });
+        }
+      } else {
+        // Create new chat
+        const { data: newChat } = await supabase
+          .from("querynet_chats")
+          .insert({ user_id: user.id, title: "New Chat" })
+          .select()
+          .single();
+        
+        if (newChat) {
+          setChatId(newChat.id);
+          // Insert welcome message
+          await supabase
+            .from("querynet_messages")
+            .insert({
+              chat_id: newChat.id,
+              role: "assistant",
+              content: "Hello! I'm Astra, your guide to the world's knowledge. Share a URL or upload a document, and I'll help you understand it."
+            });
+        }
+      }
+    };
+
+    initChat();
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim()) return;
+    if (!input.trim() || !chatId) return;
     
-    setMessages([...messages, 
-      { role: "user", content: input },
-      { role: "assistant", content: "I'm analyzing that for you. (AI integration coming soon)" }
-    ]);
+    await sendMessage(input);
     setInput("");
+  };
+
+  const handleLoadUrl = async () => {
+    if (!url.trim()) {
+      toast({
+        title: "Please enter a URL",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    toast({
+      title: "URL Processing",
+      description: "Document processing and RAG features coming soon!",
+    });
   };
 
   return (
@@ -74,7 +149,10 @@ const QueryNet = () => {
                   onChange={(e) => setUrl(e.target.value)}
                   className="bg-input border-outer-primary/30 focus:border-outer-primary"
                 />
-                <Button className="w-full bg-outer-primary hover:bg-outer-primary-light text-background">
+                <Button 
+                  onClick={handleLoadUrl}
+                  className="w-full bg-outer-primary hover:bg-outer-primary-light text-background"
+                >
                   Load URL
                 </Button>
                 <div className="relative">
@@ -87,7 +165,7 @@ const QueryNet = () => {
                 </div>
                 <Button variant="outline" className="w-full gap-2 border-outer-primary/30 hover:bg-outer-primary/10">
                   <Upload className="w-4 h-4" />
-                  Upload PDF
+                  Upload PDF (Coming Soon)
                 </Button>
               </div>
             </div>
@@ -135,9 +213,30 @@ const QueryNet = () => {
                     }`}
                   >
                     {msg.content}
+                    {msg.sources && msg.sources.length > 0 && (
+                      <div className="mt-2 pt-2 border-t border-border/50 text-xs">
+                        <p className="font-semibold mb-1">Sources:</p>
+                        {msg.sources.map((source: any, idx: number) => (
+                          <p key={idx} className="text-muted-foreground">
+                            • {source.preview}...
+                          </p>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
+              {isLoading && (
+                <div className="flex justify-start">
+                  <div className="glass-panel rounded-2xl px-4 py-3">
+                    <div className="flex gap-2">
+                      <div className="w-2 h-2 rounded-full bg-outer-primary animate-bounce" />
+                      <div className="w-2 h-2 rounded-full bg-outer-primary animate-bounce" style={{ animationDelay: "0.1s" }} />
+                      <div className="w-2 h-2 rounded-full bg-outer-primary animate-bounce" style={{ animationDelay: "0.2s" }} />
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Input */}
@@ -146,9 +245,15 @@ const QueryNet = () => {
                 placeholder="Ask Astra anything..."
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
+                disabled={isLoading || !chatId}
                 className="bg-input border-outer-primary/30 focus:border-outer-primary"
               />
-              <Button type="submit" size="icon" className="bg-outer-primary hover:bg-outer-primary-light text-background">
+              <Button 
+                type="submit" 
+                size="icon" 
+                disabled={isLoading || !chatId}
+                className="bg-outer-primary hover:bg-outer-primary-light text-background"
+              >
                 <Send className="w-4 h-4" />
               </Button>
             </form>

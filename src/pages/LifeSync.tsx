@@ -1,29 +1,149 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Sparkles, Send, ArrowLeft, Globe } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { useLifeSyncChat } from "@/hooks/useChat";
+import { useToast } from "@/hooks/use-toast";
 
 const LifeSync = () => {
   const navigate = useNavigate();
-  const [messages, setMessages] = useState<Array<{ role: string; content: string }>>([
-    { role: "assistant", content: "Welcome! I'm Luma, your personal reflection companion. How are you feeling today?" }
-  ]);
+  const { toast } = useToast();
+  const [chatId, setChatId] = useState<string>("");
   const [input, setInput] = useState("");
+  const { messages, isLoading, sendMessage } = useLifeSyncChat(chatId);
+  
+  // Daily log state
+  const [selectedMood, setSelectedMood] = useState<number | null>(null);
+  const [sleepHours, setSleepHours] = useState("");
+  const [focusHours, setFocusHours] = useState("");
+  const [energyLevel, setEnergyLevel] = useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const moods = [
+    { emoji: "😊", value: 5 },
+    { emoji: "😐", value: 3 },
+    { emoji: "😔", value: 2 },
+    { emoji: "😤", value: 4 },
+    { emoji: "😌", value: 5 },
+  ];
+
+  useEffect(() => {
+    // Create or get active chat
+    const initChat = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Get or create a chat
+      const { data: existingChats } = await supabase
+        .from("lifesync_chats")
+        .select("id")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      if (existingChats && existingChats.length > 0) {
+        setChatId(existingChats[0].id);
+        
+        // Load messages
+        const { data: msgs } = await supabase
+          .from("lifesync_messages")
+          .select("*")
+          .eq("chat_id", existingChats[0].id)
+          .order("created_at");
+        
+        if (msgs && msgs.length === 0) {
+          // Insert welcome message
+          await supabase
+            .from("lifesync_messages")
+            .insert({
+              chat_id: existingChats[0].id,
+              role: "assistant",
+              content: "Welcome! I'm Luma, your personal reflection companion. How are you feeling today?"
+            });
+        }
+      } else {
+        // Create new chat
+        const { data: newChat } = await supabase
+          .from("lifesync_chats")
+          .insert({ user_id: user.id, title: "Reflection" })
+          .select()
+          .single();
+        
+        if (newChat) {
+          setChatId(newChat.id);
+          // Insert welcome message
+          await supabase
+            .from("lifesync_messages")
+            .insert({
+              chat_id: newChat.id,
+              role: "assistant",
+              content: "Welcome! I'm Luma, your personal reflection companion. How are you feeling today?"
+            });
+        }
+      }
+    };
+
+    initChat();
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim()) return;
+    if (!input.trim() || !chatId) return;
     
-    setMessages([...messages, 
-      { role: "user", content: input },
-      { role: "assistant", content: "Thank you for sharing. I'm here to help you reflect. (AI integration coming soon)" }
-    ]);
+    await sendMessage(input);
     setInput("");
   };
 
-  const moods = ["😊", "😐", "😔", "😤", "😌"];
+  const handleSaveLog = async () => {
+    if (!selectedMood && !sleepHours && !focusHours && !energyLevel) {
+      toast({
+        title: "Please fill at least one field",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const today = new Date().toISOString().split("T")[0];
+
+      const { error } = await supabase
+        .from("lifesync_logs")
+        .upsert({
+          user_id: user.id,
+          log_date: today,
+          mood: selectedMood,
+          sleep_hours: sleepHours ? parseFloat(sleepHours) : null,
+          focus_hours: focusHours ? parseFloat(focusHours) : null,
+          energy_level: energyLevel ? parseInt(energyLevel) : null,
+        }, {
+          onConflict: "user_id,log_date"
+        });
+
+      if (error) throw error;
+
+      toast({
+        title: "Log saved!",
+        description: "Your daily reflection has been recorded.",
+      });
+
+      // Clear form
+      setSelectedMood(null);
+      setSleepHours("");
+      setFocusHours("");
+      setEnergyLevel("");
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background relative overflow-hidden">
@@ -74,10 +194,15 @@ const LifeSync = () => {
                   <div className="flex gap-2">
                     {moods.map((mood) => (
                       <button
-                        key={mood}
-                        className="text-2xl hover:scale-125 transition-smooth p-2 rounded-lg hover:bg-inner-primary/10"
+                        key={mood.emoji}
+                        onClick={() => setSelectedMood(mood.value)}
+                        className={`text-2xl hover:scale-125 transition-smooth p-2 rounded-lg ${
+                          selectedMood === mood.value
+                            ? "bg-inner-primary/20 scale-125"
+                            : "hover:bg-inner-primary/10"
+                        }`}
                       >
-                        {mood}
+                        {mood.emoji}
                       </button>
                     ))}
                   </div>
@@ -87,7 +212,10 @@ const LifeSync = () => {
                   <label className="text-sm text-muted-foreground mb-2 block">Sleep (hours)</label>
                   <Input
                     type="number"
+                    step="0.5"
                     placeholder="8"
+                    value={sleepHours}
+                    onChange={(e) => setSleepHours(e.target.value)}
                     className="bg-input border-inner-primary/30 focus:border-inner-primary"
                   />
                 </div>
@@ -96,23 +224,31 @@ const LifeSync = () => {
                   <label className="text-sm text-muted-foreground mb-2 block">Focus (hours)</label>
                   <Input
                     type="number"
+                    step="0.5"
                     placeholder="4"
+                    value={focusHours}
+                    onChange={(e) => setFocusHours(e.target.value)}
                     className="bg-input border-inner-primary/30 focus:border-inner-primary"
                   />
                 </div>
 
                 <div>
-                  <label className="text-sm text-muted-foreground mb-2 block">Energy Level (1-10)</label>
+                  <label className="text-sm text-muted-foreground mb-2 block">Energy Level (1-5)</label>
                   <Input
                     type="number"
                     min="1"
-                    max="10"
-                    placeholder="7"
+                    max="5"
+                    placeholder="4"
+                    value={energyLevel}
+                    onChange={(e) => setEnergyLevel(e.target.value)}
                     className="bg-input border-inner-primary/30 focus:border-inner-primary"
                   />
                 </div>
 
-                <Button className="w-full bg-inner-primary hover:bg-inner-primary-light text-background">
+                <Button 
+                  onClick={handleSaveLog}
+                  className="w-full bg-inner-primary hover:bg-inner-primary-light text-background"
+                >
                   Save Today's Log
                 </Button>
               </div>
@@ -122,10 +258,10 @@ const LifeSync = () => {
               <h3 className="text-sm font-semibold mb-2 text-muted-foreground">Insights</h3>
               <div className="space-y-2">
                 <Button variant="ghost" className="w-full justify-start text-sm hover:bg-inner-primary/10">
-                  📊 Dashboard
+                  📊 Dashboard (Coming Soon)
                 </Button>
                 <Button variant="ghost" className="w-full justify-start text-sm hover:bg-inner-primary/10">
-                  🔥 Streak: 3 days
+                  🔥 Streak
                 </Button>
                 <Button variant="ghost" className="w-full justify-start text-sm hover:bg-inner-primary/10">
                   ⭐ Weekly Summary
@@ -164,6 +300,17 @@ const LifeSync = () => {
                   </div>
                 </div>
               ))}
+              {isLoading && (
+                <div className="flex justify-start">
+                  <div className="glass-panel rounded-2xl px-4 py-3">
+                    <div className="flex gap-2">
+                      <div className="w-2 h-2 rounded-full bg-inner-primary animate-bounce" />
+                      <div className="w-2 h-2 rounded-full bg-inner-primary animate-bounce" style={{ animationDelay: "0.1s" }} />
+                      <div className="w-2 h-2 rounded-full bg-inner-primary animate-bounce" style={{ animationDelay: "0.2s" }} />
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Input */}
@@ -172,9 +319,15 @@ const LifeSync = () => {
                 placeholder="Share your thoughts with Luma..."
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
+                disabled={isLoading || !chatId}
                 className="bg-input border-inner-primary/30 focus:border-inner-primary"
               />
-              <Button type="submit" size="icon" className="bg-gradient-to-r from-inner-primary to-inner-secondary hover:opacity-90 text-background">
+              <Button 
+                type="submit" 
+                size="icon" 
+                disabled={isLoading || !chatId}
+                className="bg-gradient-to-r from-inner-primary to-inner-secondary hover:opacity-90 text-background"
+              >
                 <Send className="w-4 h-4" />
               </Button>
             </form>
