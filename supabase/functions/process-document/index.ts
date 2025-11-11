@@ -20,6 +20,24 @@ serve(async (req) => {
       throw new Error("No file provided");
     }
 
+    // Check file type - only support text files for now
+    const supportedTextTypes = [
+      'text/plain',
+      'text/markdown',
+      'text/csv',
+      'application/json',
+      'text/html',
+    ];
+
+    const fileType = file.type || '';
+    const isTextFile = supportedTextTypes.includes(fileType) || 
+                       file.name.endsWith('.txt') || 
+                       file.name.endsWith('.md');
+
+    if (!isTextFile) {
+      throw new Error(`File type not supported yet. Please upload a text file (.txt, .md, .csv, .json, or .html). PDF support coming soon!`);
+    }
+
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_ANON_KEY") ?? "",
@@ -29,16 +47,22 @@ serve(async (req) => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error("Unauthorized");
 
+    console.log(`Processing file: ${file.name}, type: ${file.type}, size: ${file.size} bytes`);
+
     // Upload file to storage
     const fileName = `${user.id}/${Date.now()}_${file.name}`;
     const { error: uploadError } = await supabase.storage
       .from("documents")
       .upload(fileName, file);
 
-    if (uploadError) throw uploadError;
+    if (uploadError) {
+      console.error("Upload error:", uploadError);
+      throw uploadError;
+    }
 
-    // Extract text from file (simplified - in production use proper PDF parser)
+    // Extract text from file
     const text = await file.text();
+    console.log(`Extracted text length: ${text.length} characters`);
     
     // Create document record
     const { data: doc, error: docError } = await supabase
