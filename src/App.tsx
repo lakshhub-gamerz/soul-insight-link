@@ -9,12 +9,14 @@ import LifeSync from "./pages/LifeSync";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
+import StarfieldBackground from "./components/StarfieldBackground";
 
 const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
+      <StarfieldBackground />
       <Toaster />
       <Sonner />
       <BrowserRouter>
