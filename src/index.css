@@ -30,6 +30,14 @@ All colors MUST be HSL.
     --inner-secondary: 280 65% 50%;
     --inner-accent: 45 90% 60%;
     --inner-glow: 270 70% 60%;
+    
+    /* Emotion Colors */
+    --emotion-calm: 210 85% 60%;
+    --emotion-joy: 45 100% 65%;
+    --emotion-focus: 170 85% 65%;
+    --emotion-sad: 270 75% 65%;
+    --emotion-grateful: 320 85% 70%;
+    --emotion-neutral: 0 0% 60%;
 
     --primary: 195 85% 55%;
     --primary-foreground: 220 25% 6%;
@@ -61,6 +69,11 @@ All colors MUST be HSL.
     --gradient-inner: linear-gradient(135deg, hsl(270 70% 40%), hsl(280 65% 50%), hsl(45 90% 50%));
     --gradient-hero: linear-gradient(180deg, hsl(220 25% 6%) 0%, hsl(220 20% 10%) 100%);
     
+    /* Cosmic Nebula Background */
+    --nebula-glow: radial-gradient(ellipse at 30% 50%, hsl(270 70% 30% / 0.3), transparent 50%),
+                   radial-gradient(ellipse at 70% 80%, hsl(280 65% 35% / 0.25), transparent 50%),
+                   radial-gradient(ellipse at 50% 20%, hsl(45 90% 40% / 0.2), transparent 50%);
+    
     /* Animations */
     --transition-smooth: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     --transition-portal: all 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
@@ -80,6 +93,15 @@ All colors MUST be HSL.
   h1, h2, h3, h4, h5, h6 {
     font-weight: 600;
     letter-spacing: -0.02em;
+  }
+  
+  .font-orbitron {
+    font-family: 'Orbitron', sans-serif;
+  }
+  
+  .font-inter-light {
+    font-family: 'Inter', sans-serif;
+    font-weight: 300;
   }
 }
 
@@ -126,5 +148,46 @@ All colors MUST be HSL.
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
+  }
+  
+  .nebula-bg {
+    background: var(--nebula-glow), hsl(var(--background));
+  }
+  
+  .glass-intense {
+    background: hsl(220 20% 10% / 0.6);
+    backdrop-filter: blur(30px) saturate(150%);
+    border: 1px solid hsl(210 40% 98% / 0.15);
+  }
+  
+  .glow-emotion {
+    filter: drop-shadow(0 0 20px currentColor) drop-shadow(0 0 40px currentColor);
+  }
+  
+  @keyframes breathe {
+    0%, 100% { transform: scale(1); opacity: 0.8; }
+    50% { transform: scale(1.05); opacity: 1; }
+  }
+  
+  .animate-breathe {
+    animation: breathe 3s ease-in-out infinite;
+  }
+  
+  @keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-20px); }
+  }
+  
+  .animate-float {
+    animation: float 6s ease-in-out infinite;
+  }
+  
+  @keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 20px currentColor; }
+    50% { box-shadow: 0 0 40px currentColor, 0 0 60px currentColor; }
+  }
+  
+  .animate-pulse-glow {
+    animation: pulse-glow 2s ease-in-out infinite;
   }
 }

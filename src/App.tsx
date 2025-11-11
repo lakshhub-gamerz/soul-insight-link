@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Home from "./pages/Home";
 import QueryNet from "./pages/QueryNet";
-import LifeSync from "./pages/LifeSync";
+import LifeSyncEnhanced from "./pages/LifeSyncEnhanced";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -34,7 +34,7 @@ const App = () => (
           } />
           <Route path="/lifesync" element={
             <ProtectedRoute>
-              <LifeSync />
+              <LifeSyncEnhanced />
             </ProtectedRoute>
           } />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

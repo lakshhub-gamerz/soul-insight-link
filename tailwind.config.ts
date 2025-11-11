@@ -61,6 +61,14 @@ export default {
           accent: "hsl(var(--inner-accent))",
           glow: "hsl(var(--inner-glow))",
         },
+        emotion: {
+          calm: "hsl(var(--emotion-calm))",
+          joy: "hsl(var(--emotion-joy))",
+          focus: "hsl(var(--emotion-focus))",
+          sad: "hsl(var(--emotion-sad))",
+          grateful: "hsl(var(--emotion-grateful))",
+          neutral: "hsl(var(--emotion-neutral))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -88,6 +96,13 @@ export default {
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        breathe: "breathe 3s ease-in-out infinite",
+        float: "float 6s ease-in-out infinite",
+        "pulse-glow": "pulse-glow 2s ease-in-out infinite",
+      },
+      fontFamily: {
+        orbitron: ['Orbitron', 'sans-serif'],
+        inter: ['Inter', 'sans-serif'],
       },
     },
   },
