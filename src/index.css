@@ -17,12 +17,12 @@ All colors MUST be HSL.
     --popover: 220 20% 10%;
     --popover-foreground: 210 40% 98%;
 
-    /* Outer World (QueryNet) - Blue/Cyan Theme */
-    --outer-primary: 195 85% 55%;
-    --outer-primary-light: 195 85% 65%;
-    --outer-secondary: 200 75% 45%;
-    --outer-accent: 185 80% 60%;
-    --outer-glow: 195 85% 55%;
+    /* Outer World (QueryNet) - Cyan/Magenta Cosmic Theme */
+    --outer-primary: 180 100% 50%;
+    --outer-primary-light: 180 100% 60%;
+    --outer-secondary: 300 100% 50%;
+    --outer-accent: 45 100% 60%;
+    --outer-glow: 180 100% 70%;
     
     /* Inner World (LifeSync) - Violet/Gold Theme */
     --inner-primary: 270 70% 60%;

@@ -103,6 +103,7 @@ export default {
       fontFamily: {
         orbitron: ['Orbitron', 'sans-serif'],
         inter: ['Inter', 'sans-serif'],
+        poppins: ['Poppins', 'sans-serif'],
       },
     },
   },
