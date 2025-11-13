@@ -107,6 +107,12 @@ Provide clear, concise answers based on the context above. Always cite which par
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+      if (response.status === 503) {
+        return new Response(JSON.stringify({ error: "AI service temporarily unavailable. Please try again in a moment." }), {
+          status: 503,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       throw new Error(`AI API error: ${response.status}`);
     }
 
