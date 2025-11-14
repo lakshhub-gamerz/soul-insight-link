@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Globe, Sparkles, LogOut } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import FloatingOrb from "@/components/FloatingOrb";
 
 const Home = () => {
   const navigate = useNavigate();
@@ -53,6 +54,10 @@ const Home = () => {
             className="group relative glass-panel rounded-2xl p-8 hover:scale-105 transition-portal overflow-hidden"
           >
             <div className="absolute inset-0 bg-gradient-to-br from-outer-primary/20 to-transparent opacity-0 group-hover:opacity-100 transition-smooth" />
+            {/* 3D Orb Background */}
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-30 pointer-events-none">
+              <FloatingOrb emotion="focus" />
+            </div>
             <div className="relative space-y-4">
               <div className="w-16 h-16 mx-auto rounded-full bg-outer-primary/20 flex items-center justify-center glow-outer">
                 <Globe className="w-8 h-8 text-outer-primary" />
@@ -75,6 +80,10 @@ const Home = () => {
             className="group relative glass-panel rounded-2xl p-8 hover:scale-105 transition-portal overflow-hidden"
           >
             <div className="absolute inset-0 bg-gradient-to-br from-inner-primary/20 to-transparent opacity-0 group-hover:opacity-100 transition-smooth" />
+            {/* 3D Orb Background */}
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-30 pointer-events-none">
+              <FloatingOrb emotion="grateful" />
+            </div>
             <div className="relative space-y-4">
               <div className="w-16 h-16 mx-auto rounded-full bg-inner-primary/20 flex items-center justify-center glow-inner">
                 <Sparkles className="w-8 h-8 text-inner-primary" />
