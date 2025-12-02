@@ -6,7 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   Sparkles, Send, ArrowLeft, BarChart3, History, Brain, 
-  Wind, BookOpen, CheckCircle, MessageCircle 
+  Wind, BookOpen, CheckCircle, MessageCircle, Trophy, CalendarDays
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -22,6 +22,8 @@ import BreathCoach from "@/components/BreathCoach";
 import GuidedReflection from "@/components/GuidedReflection";
 import EmotionAnalyzer from "@/components/EmotionAnalyzer";
 import DailyCheckIn from "@/components/DailyCheckIn";
+import WeeklyInsights from "@/components/WeeklyInsights";
+import Achievements from "@/components/Achievements";
 import {
   Sheet,
   SheetContent,
@@ -260,6 +262,20 @@ const LifeSyncEnhanced = () => {
                 </Button>
                 <Button 
                   variant="ghost"
+                  onClick={() => setActiveTab("weekly")}
+                  className="justify-start text-sm hover:bg-inner-primary/10"
+                >
+                  <CalendarDays className="mr-2 w-4 h-4" /> Weekly
+                </Button>
+                <Button 
+                  variant="ghost"
+                  onClick={() => setActiveTab("achievements")}
+                  className="justify-start text-sm hover:bg-inner-primary/10"
+                >
+                  <Trophy className="mr-2 w-4 h-4" /> Badges
+                </Button>
+                <Button 
+                  variant="ghost"
                   onClick={() => setActiveTab("checkin")}
                   className="justify-start text-sm hover:bg-inner-primary/10"
                 >
@@ -278,26 +294,27 @@ const LifeSyncEnhanced = () => {
           >
             <Card className="glass-intense p-6 h-[calc(100vh-200px)]">
               <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
-                <TabsList className="grid grid-cols-5 bg-background/50 mb-4">
+                <TabsList className="grid grid-cols-7 bg-background/50 mb-4 overflow-x-auto">
                   <TabsTrigger value="chat" className="data-[state=active]:bg-inner-primary/20">
-                    <MessageCircle className="w-4 h-4 mr-2" />
-                    <span className="hidden sm:inline">Chat</span>
+                    <MessageCircle className="w-4 h-4" />
                   </TabsTrigger>
                   <TabsTrigger value="analyze" className="data-[state=active]:bg-inner-primary/20">
-                    <Brain className="w-4 h-4 mr-2" />
-                    <span className="hidden sm:inline">Analyze</span>
+                    <Brain className="w-4 h-4" />
                   </TabsTrigger>
                   <TabsTrigger value="checkin" className="data-[state=active]:bg-inner-primary/20">
-                    <CheckCircle className="w-4 h-4 mr-2" />
-                    <span className="hidden sm:inline">Check-In</span>
+                    <CheckCircle className="w-4 h-4" />
                   </TabsTrigger>
                   <TabsTrigger value="breath" className="data-[state=active]:bg-inner-primary/20">
-                    <Wind className="w-4 h-4 mr-2" />
-                    <span className="hidden sm:inline">Breathe</span>
+                    <Wind className="w-4 h-4" />
                   </TabsTrigger>
                   <TabsTrigger value="reflect" className="data-[state=active]:bg-inner-primary/20">
-                    <BookOpen className="w-4 h-4 mr-2" />
-                    <span className="hidden sm:inline">Reflect</span>
+                    <BookOpen className="w-4 h-4" />
+                  </TabsTrigger>
+                  <TabsTrigger value="weekly" className="data-[state=active]:bg-inner-primary/20">
+                    <CalendarDays className="w-4 h-4" />
+                  </TabsTrigger>
+                  <TabsTrigger value="achievements" className="data-[state=active]:bg-inner-primary/20">
+                    <Trophy className="w-4 h-4" />
                   </TabsTrigger>
                 </TabsList>
 
@@ -403,6 +420,16 @@ const LifeSyncEnhanced = () => {
                 {/* Guided Reflection Tab */}
                 <TabsContent value="reflect" className="flex-1 overflow-y-auto mt-0">
                   <GuidedReflection />
+                </TabsContent>
+
+                {/* Weekly Insights Tab */}
+                <TabsContent value="weekly" className="flex-1 overflow-y-auto mt-0">
+                  <WeeklyInsights />
+                </TabsContent>
+
+                {/* Achievements Tab */}
+                <TabsContent value="achievements" className="flex-1 overflow-y-auto mt-0">
+                  <Achievements />
                 </TabsContent>
               </Tabs>
             </Card>
