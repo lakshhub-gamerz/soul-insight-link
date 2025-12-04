@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,7 +9,8 @@ import { Progress } from "@/components/ui/progress";
 import { 
   Zap, ArrowLeft, Plus, Play, Pause, RotateCcw, 
   CheckCircle, Clock, Target, Sparkles, Calendar,
-  Trash2, Edit, Save, X, ListTodo, Timer, Wand2
+  Trash2, Edit, Save, X, ListTodo, Timer, Wand2,
+  Volume2, VolumeX, Cloud, TreePine, Waves, Coffee, Music, BarChart3
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -34,6 +35,32 @@ interface Routine {
   is_active: boolean;
 }
 
+interface FocusSession {
+  id: string;
+  duration_minutes: number;
+  actual_minutes: number;
+  completed: boolean;
+  ambient_sound: string | null;
+  started_at: string;
+  completed_at: string | null;
+}
+
+interface FocusStats {
+  totalSessions: number;
+  completedSessions: number;
+  totalFocusMinutes: number;
+  currentStreak: number;
+  todaySessions: number;
+}
+
+const AMBIENT_SOUNDS = [
+  { id: "rain", name: "Rain", icon: Cloud, url: "https://cdn.pixabay.com/audio/2022/05/13/audio_257112671d.mp3" },
+  { id: "forest", name: "Forest", icon: TreePine, url: "https://cdn.pixabay.com/audio/2022/02/22/audio_d1718ab41b.mp3" },
+  { id: "ocean", name: "Ocean", icon: Waves, url: "https://cdn.pixabay.com/audio/2022/06/25/audio_69a61cd6d6.mp3" },
+  { id: "cafe", name: "Café", icon: Coffee, url: "https://cdn.pixabay.com/audio/2022/03/10/audio_c7a91f02ad.mp3" },
+  { id: "lofi", name: "Lo-Fi", icon: Music, url: "https://cdn.pixabay.com/audio/2022/05/27/audio_1808fbf07a.mp3" },
+];
+
 const Astra = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -49,9 +76,27 @@ const Astra = () => {
   const [focusTime, setFocusTime] = useState(25 * 60);
   const [isRunning, setIsRunning] = useState(false);
   const [selectedFocusDuration, setSelectedFocusDuration] = useState(25);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [sessionStartTime, setSessionStartTime] = useState<Date | null>(null);
+
+  // Ambient sound state
+  const [selectedSound, setSelectedSound] = useState<string | null>(null);
+  const [isMuted, setIsMuted] = useState(false);
+  const [volume, setVolume] = useState(0.5);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Analytics state
+  const [focusStats, setFocusStats] = useState<FocusStats>({
+    totalSessions: 0,
+    completedSessions: 0,
+    totalFocusMinutes: 0,
+    currentStreak: 0,
+    todaySessions: 0,
+  });
 
   useEffect(() => {
     loadData();
+    loadFocusStats();
   }, []);
 
   useEffect(() => {
@@ -60,8 +105,9 @@ const Astra = () => {
       interval = setInterval(() => {
         setFocusTime(prev => prev - 1);
       }, 1000);
-    } else if (focusTime === 0) {
+    } else if (focusTime === 0 && isRunning) {
       setIsRunning(false);
+      completeFocusSession();
       toast({
         title: "Focus Session Complete! 🎉",
         description: "Great job! Take a short break.",
@@ -225,9 +271,178 @@ const Astra = () => {
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
 
-  const resetTimer = () => {
+  const resetTimer = async () => {
+    if (currentSessionId) {
+      // Cancel current session
+      await supabase
+        .from("focus_sessions")
+        .delete()
+        .eq("id", currentSessionId);
+    }
     setIsRunning(false);
     setFocusTime(selectedFocusDuration * 60);
+    setCurrentSessionId(null);
+    setSessionStartTime(null);
+    stopAmbientSound();
+  };
+
+  const startFocusSession = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from("focus_sessions")
+        .insert({
+          user_id: user.id,
+          duration_minutes: selectedFocusDuration,
+          ambient_sound: selectedSound,
+          started_at: new Date().toISOString(),
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      if (data) {
+        setCurrentSessionId(data.id);
+        setSessionStartTime(new Date());
+        setIsRunning(true);
+        playAmbientSound();
+      }
+    } catch (error) {
+      console.error("Error starting session:", error);
+      setIsRunning(true); // Still run even if tracking fails
+    }
+  };
+
+  const completeFocusSession = async () => {
+    if (!currentSessionId || !sessionStartTime) return;
+    
+    try {
+      const actualMinutes = Math.round((Date.now() - sessionStartTime.getTime()) / 60000);
+      
+      await supabase
+        .from("focus_sessions")
+        .update({
+          completed: true,
+          actual_minutes: actualMinutes,
+          completed_at: new Date().toISOString(),
+        })
+        .eq("id", currentSessionId);
+
+      setCurrentSessionId(null);
+      setSessionStartTime(null);
+      stopAmbientSound();
+      loadFocusStats();
+    } catch (error) {
+      console.error("Error completing session:", error);
+    }
+  };
+
+  const loadFocusStats = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: sessions } = await supabase
+        .from("focus_sessions")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("started_at", { ascending: false });
+
+      if (sessions) {
+        const today = new Date().toDateString();
+        const todaySessions = sessions.filter(
+          s => new Date(s.started_at).toDateString() === today
+        );
+
+        // Calculate streak (consecutive days with completed sessions)
+        let streak = 0;
+        const days = new Set(
+          sessions
+            .filter(s => s.completed)
+            .map(s => new Date(s.started_at).toDateString())
+        );
+        
+        const currentDate = new Date();
+        while (days.has(currentDate.toDateString())) {
+          streak++;
+          currentDate.setDate(currentDate.getDate() - 1);
+        }
+
+        setFocusStats({
+          totalSessions: sessions.length,
+          completedSessions: sessions.filter(s => s.completed).length,
+          totalFocusMinutes: sessions
+            .filter(s => s.completed)
+            .reduce((sum, s) => sum + (s.actual_minutes || 0), 0),
+          currentStreak: streak,
+          todaySessions: todaySessions.filter(s => s.completed).length,
+        });
+      }
+    } catch (error) {
+      console.error("Error loading focus stats:", error);
+    }
+  };
+
+  const playAmbientSound = () => {
+    if (!selectedSound || isMuted) return;
+    
+    const sound = AMBIENT_SOUNDS.find(s => s.id === selectedSound);
+    if (!sound) return;
+
+    if (audioRef.current) {
+      audioRef.current.pause();
+    }
+
+    audioRef.current = new Audio(sound.url);
+    audioRef.current.loop = true;
+    audioRef.current.volume = volume;
+    audioRef.current.play().catch(console.error);
+  };
+
+  const stopAmbientSound = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+  };
+
+  const toggleSound = (soundId: string) => {
+    if (selectedSound === soundId) {
+      setSelectedSound(null);
+      stopAmbientSound();
+    } else {
+      setSelectedSound(soundId);
+      if (isRunning && !isMuted) {
+        const sound = AMBIENT_SOUNDS.find(s => s.id === soundId);
+        if (sound) {
+          if (audioRef.current) audioRef.current.pause();
+          audioRef.current = new Audio(sound.url);
+          audioRef.current.loop = true;
+          audioRef.current.volume = volume;
+          audioRef.current.play().catch(console.error);
+        }
+      }
+    }
+  };
+
+  const toggleMute = () => {
+    setIsMuted(!isMuted);
+    if (audioRef.current) {
+      if (!isMuted) {
+        audioRef.current.pause();
+      } else if (isRunning && selectedSound) {
+        audioRef.current.play().catch(console.error);
+      }
+    }
+  };
+
+  const handleVolumeChange = (newVolume: number) => {
+    setVolume(newVolume);
+    if (audioRef.current) {
+      audioRef.current.volume = newVolume;
+    }
   };
 
   const getPriorityColor = (priority: string) => {
@@ -425,86 +640,230 @@ const Astra = () => {
 
           {/* Focus Tab */}
           <TabsContent value="focus">
-            <Card className="glass-intense p-8 max-w-lg mx-auto text-center">
-              <h3 className="font-orbitron font-semibold mb-6 text-xl">Focus Mode</h3>
-              
-              <div className="relative w-64 h-64 mx-auto mb-8">
-                <svg className="w-full h-full transform -rotate-90">
-                  <circle
-                    cx="128"
-                    cy="128"
-                    r="120"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="8"
-                    className="text-cyan-500/20"
-                  />
-                  <circle
-                    cx="128"
-                    cy="128"
-                    r="120"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="8"
-                    strokeDasharray={2 * Math.PI * 120}
-                    strokeDashoffset={2 * Math.PI * 120 * (1 - focusTime / (selectedFocusDuration * 60))}
-                    className="text-cyan-400 transition-all duration-1000"
-                    strokeLinecap="round"
-                  />
-                </svg>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="text-5xl font-orbitron font-bold text-cyan-400">
-                    {formatTime(focusTime)}
-                  </span>
+            <div className="grid lg:grid-cols-3 gap-6">
+              {/* Main Timer */}
+              <Card className="glass-intense p-8 lg:col-span-2 text-center">
+                <h3 className="font-orbitron font-semibold mb-6 text-xl flex items-center justify-center gap-2">
+                  <Timer className="w-6 h-6 text-cyan-400" />
+                  Focus Mode
+                </h3>
+                
+                <div className="relative w-64 h-64 mx-auto mb-8">
+                  <svg className="w-full h-full transform -rotate-90">
+                    <circle
+                      cx="128"
+                      cy="128"
+                      r="120"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="8"
+                      className="text-cyan-500/20"
+                    />
+                    <motion.circle
+                      cx="128"
+                      cy="128"
+                      r="120"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="8"
+                      strokeDasharray={2 * Math.PI * 120}
+                      strokeDashoffset={2 * Math.PI * 120 * (1 - focusTime / (selectedFocusDuration * 60))}
+                      className="text-cyan-400"
+                      strokeLinecap="round"
+                      animate={{ strokeDashoffset: 2 * Math.PI * 120 * (1 - focusTime / (selectedFocusDuration * 60)) }}
+                      transition={{ duration: 1, ease: "linear" }}
+                    />
+                  </svg>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <span className="text-5xl font-orbitron font-bold text-cyan-400">
+                      {formatTime(focusTime)}
+                    </span>
+                    {isRunning && (
+                      <span className="text-xs text-muted-foreground mt-2">
+                        {selectedSound ? `Playing: ${AMBIENT_SOUNDS.find(s => s.id === selectedSound)?.name}` : "No sound"}
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </div>
 
-              <div className="flex justify-center gap-3 mb-6">
-                {[15, 25, 45, 60].map((mins) => (
+                {/* Duration Selection */}
+                <div className="flex justify-center gap-3 mb-6">
+                  {[15, 25, 45, 60].map((mins) => (
+                    <Button
+                      key={mins}
+                      variant={selectedFocusDuration === mins ? "default" : "outline"}
+                      size="sm"
+                      disabled={isRunning}
+                      onClick={() => {
+                        setSelectedFocusDuration(mins);
+                        setFocusTime(mins * 60);
+                      }}
+                      className={selectedFocusDuration === mins ? "gradient-cosmic" : "border-cyan-500/30"}
+                    >
+                      {mins}m
+                    </Button>
+                  ))}
+                </div>
+
+                {/* Control Buttons */}
+                <div className="flex justify-center gap-4">
                   <Button
-                    key={mins}
-                    variant={selectedFocusDuration === mins ? "default" : "outline"}
-                    size="sm"
+                    size="lg"
                     onClick={() => {
-                      setSelectedFocusDuration(mins);
-                      setFocusTime(mins * 60);
-                      setIsRunning(false);
+                      if (isRunning) {
+                        setIsRunning(false);
+                        stopAmbientSound();
+                      } else {
+                        startFocusSession();
+                      }
                     }}
-                    className={selectedFocusDuration === mins ? "gradient-cosmic" : "border-cyan-500/30"}
+                    className="gradient-cosmic"
                   >
-                    {mins}m
+                    {isRunning ? (
+                      <>
+                        <Pause className="w-5 h-5 mr-2" />
+                        Pause
+                      </>
+                    ) : (
+                      <>
+                        <Play className="w-5 h-5 mr-2" />
+                        Start
+                      </>
+                    )}
                   </Button>
-                ))}
-              </div>
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    onClick={resetTimer}
+                    className="border-cyan-500/30"
+                  >
+                    <RotateCcw className="w-5 h-5" />
+                  </Button>
+                </div>
 
-              <div className="flex justify-center gap-4">
-                <Button
-                  size="lg"
-                  onClick={() => setIsRunning(!isRunning)}
-                  className="gradient-cosmic"
-                >
-                  {isRunning ? (
-                    <>
-                      <Pause className="w-5 h-5 mr-2" />
-                      Pause
-                    </>
-                  ) : (
-                    <>
-                      <Play className="w-5 h-5 mr-2" />
-                      Start
-                    </>
+                {/* Ambient Sounds */}
+                <div className="mt-8 pt-6 border-t border-cyan-500/20">
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="text-sm font-medium text-muted-foreground">Ambient Sounds</h4>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={toggleMute}
+                      className="h-8 w-8"
+                    >
+                      {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+                    </Button>
+                  </div>
+                  <div className="flex justify-center gap-2 flex-wrap">
+                    {AMBIENT_SOUNDS.map((sound) => {
+                      const Icon = sound.icon;
+                      return (
+                        <Button
+                          key={sound.id}
+                          variant={selectedSound === sound.id ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => toggleSound(sound.id)}
+                          className={`${selectedSound === sound.id ? "gradient-cosmic" : "border-cyan-500/30"}`}
+                        >
+                          <Icon className="w-4 h-4 mr-1" />
+                          {sound.name}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                  
+                  {/* Volume Slider */}
+                  {selectedSound && !isMuted && (
+                    <div className="mt-4 flex items-center gap-3 justify-center">
+                      <Volume2 className="w-4 h-4 text-muted-foreground" />
+                      <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.1"
+                        value={volume}
+                        onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
+                        className="w-32 accent-cyan-400"
+                      />
+                    </div>
                   )}
-                </Button>
-                <Button
-                  size="lg"
-                  variant="outline"
-                  onClick={resetTimer}
-                  className="border-cyan-500/30"
-                >
-                  <RotateCcw className="w-5 h-5" />
-                </Button>
-              </div>
-            </Card>
+                </div>
+              </Card>
+
+              {/* Analytics Panel */}
+              <Card className="glass-intense p-6">
+                <h3 className="font-orbitron font-semibold mb-6 flex items-center gap-2">
+                  <BarChart3 className="w-5 h-5 text-cyan-400" />
+                  Focus Analytics
+                </h3>
+
+                <div className="space-y-4">
+                  <div className="p-4 rounded-lg bg-background/30">
+                    <div className="text-3xl font-orbitron font-bold text-cyan-400">
+                      {focusStats.currentStreak}
+                    </div>
+                    <div className="text-sm text-muted-foreground">Day Streak 🔥</div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="p-3 rounded-lg bg-background/30 text-center">
+                      <div className="text-xl font-semibold">{focusStats.todaySessions}</div>
+                      <div className="text-xs text-muted-foreground">Today</div>
+                    </div>
+                    <div className="p-3 rounded-lg bg-background/30 text-center">
+                      <div className="text-xl font-semibold">{focusStats.completedSessions}</div>
+                      <div className="text-xs text-muted-foreground">Total Sessions</div>
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-lg bg-background/30">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm text-muted-foreground">Total Focus Time</span>
+                      <Clock className="w-4 h-4 text-cyan-400" />
+                    </div>
+                    <div className="text-2xl font-semibold">
+                      {Math.floor(focusStats.totalFocusMinutes / 60)}h {focusStats.totalFocusMinutes % 60}m
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-lg bg-background/30">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm text-muted-foreground">Completion Rate</span>
+                      <Target className="w-4 h-4 text-green-400" />
+                    </div>
+                    <div className="text-2xl font-semibold text-green-400">
+                      {focusStats.totalSessions > 0 
+                        ? Math.round((focusStats.completedSessions / focusStats.totalSessions) * 100)
+                        : 0}%
+                    </div>
+                    <Progress 
+                      value={focusStats.totalSessions > 0 
+                        ? (focusStats.completedSessions / focusStats.totalSessions) * 100
+                        : 0} 
+                      className="mt-2 h-2" 
+                    />
+                  </div>
+
+                  <div className="pt-4 border-t border-cyan-500/20">
+                    <h4 className="text-sm font-medium mb-3">Quick Tips</h4>
+                    <ul className="space-y-2 text-xs text-muted-foreground">
+                      <li className="flex items-start gap-2">
+                        <Sparkles className="w-3 h-3 mt-0.5 text-cyan-400" />
+                        Use the Pomodoro technique: 25 min focus, 5 min break
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <Sparkles className="w-3 h-3 mt-0.5 text-cyan-400" />
+                        Try ambient sounds to improve concentration
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <Sparkles className="w-3 h-3 mt-0.5 text-cyan-400" />
+                        Build your streak for consistent productivity
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </Card>
+            </div>
           </TabsContent>
 
           {/* Routines Tab */}

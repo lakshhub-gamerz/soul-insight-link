@@ -87,6 +87,50 @@ export type Database = {
           },
         ]
       }
+      focus_sessions: {
+        Row: {
+          actual_minutes: number
+          ambient_sound: string | null
+          completed: boolean
+          completed_at: string | null
+          created_at: string
+          duration_minutes: number
+          id: string
+          started_at: string
+          user_id: string
+        }
+        Insert: {
+          actual_minutes?: number
+          ambient_sound?: string | null
+          completed?: boolean
+          completed_at?: string | null
+          created_at?: string
+          duration_minutes: number
+          id?: string
+          started_at?: string
+          user_id: string
+        }
+        Update: {
+          actual_minutes?: number
+          ambient_sound?: string | null
+          completed?: boolean
+          completed_at?: string | null
+          created_at?: string
+          duration_minutes?: number
+          id?: string
+          started_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "focus_sessions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lifesync_chats: {
         Row: {
           created_at: string
