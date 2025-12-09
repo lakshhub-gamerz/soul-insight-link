@@ -14,6 +14,75 @@ export type Database = {
   }
   public: {
     Tables: {
+      activity_history: {
+        Row: {
+          activity_type: string
+          created_at: string
+          description: string | null
+          id: string
+          metadata: Json | null
+          title: string
+          user_id: string
+        }
+        Insert: {
+          activity_type: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          metadata?: Json | null
+          title: string
+          user_id: string
+        }
+        Update: {
+          activity_type?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          metadata?: Json | null
+          title?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      decision_logs: {
+        Row: {
+          ai_analysis: Json | null
+          chosen_option: string | null
+          created_at: string
+          id: string
+          options: Json
+          outcome_notes: string | null
+          status: string | null
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          ai_analysis?: Json | null
+          chosen_option?: string | null
+          created_at?: string
+          id?: string
+          options?: Json
+          outcome_notes?: string | null
+          status?: string | null
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          ai_analysis?: Json | null
+          chosen_option?: string | null
+          created_at?: string
+          id?: string
+          options?: Json
+          outcome_notes?: string | null
+          status?: string | null
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       document_chunks: {
         Row: {
           chunk_index: number
@@ -517,6 +586,42 @@ export type Database = {
           },
         ]
       }
+      sense_readings: {
+        Row: {
+          ai_recommendations: Json | null
+          created_at: string
+          energy_level: number
+          focus_level: number
+          generated_tasks: Json | null
+          id: string
+          mood_level: number
+          reading_time: string
+          user_id: string
+        }
+        Insert: {
+          ai_recommendations?: Json | null
+          created_at?: string
+          energy_level: number
+          focus_level: number
+          generated_tasks?: Json | null
+          id?: string
+          mood_level: number
+          reading_time?: string
+          user_id: string
+        }
+        Update: {
+          ai_recommendations?: Json | null
+          created_at?: string
+          energy_level?: number
+          focus_level?: number
+          generated_tasks?: Json | null
+          id?: string
+          mood_level?: number
+          reading_time?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       tasks: {
         Row: {
           completed_at: string | null
@@ -576,6 +681,54 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      timeline_events: {
+        Row: {
+          ai_insights: string | null
+          category: string | null
+          created_at: string
+          description: string | null
+          energy_score: number | null
+          event_date: string
+          event_type: string
+          id: string
+          is_predicted: boolean | null
+          mood_score: number | null
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          ai_insights?: string | null
+          category?: string | null
+          created_at?: string
+          description?: string | null
+          energy_score?: number | null
+          event_date: string
+          event_type?: string
+          id?: string
+          is_predicted?: boolean | null
+          mood_score?: number | null
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          ai_insights?: string | null
+          category?: string | null
+          created_at?: string
+          description?: string | null
+          energy_score?: number | null
+          event_date?: string
+          event_type?: string
+          id?: string
+          is_predicted?: boolean | null
+          mood_score?: number | null
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       user_settings: {
         Row: {
